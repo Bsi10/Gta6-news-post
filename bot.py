@@ -2,7 +2,7 @@ import os
 import asyncio
 import requests
 from flask import Flask, request
-from telegram import Update, Bot
+from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # === CONFIG ===
@@ -78,18 +78,17 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 application.add_handler(CommandHandler("start", start_command))
 application.add_handler(CommandHandler("news", news_command))
 
-# === INITIALISER LE BOT AU DÉMARRAGE ===
-@app.before_request
-def startup():
-    if not hasattr(app, '_bot_initialized'):
-        asyncio.run(application.initialize())
-        app._bot_initialized = True
-
-# === WEBHOOK ROUTE ===
+# === WEBHOOK ROUTE (SYNCHRONE) ===
 @app.route('/webhook', methods=['POST'])
-async def webhook():
+def webhook():
     data = request.get_json(force=True)
-    await application.process_update(Update.de_json(data, application.bot))
+    update = Update.de_json(data, application.bot)
+    
+    # Exécuter la mise à jour async de façon synchrone
+    async def process():
+        await application.process_update(update)
+    
+    asyncio.run(process())
     return 'OK'
 
 # === HEALTH CHECK ===
@@ -109,8 +108,15 @@ def set_webhook():
     response = requests.post(url, json={"url": webhook_url})
     print(f"Webhook set: {response.json()}")
 
+# === INITIALISER LE BOT ===
+def init_bot():
+    async def init():
+        await application.initialize()
+    asyncio.run(init())
+
 # === MAIN ===
 if __name__ == "__main__":
+    init_bot()
     set_webhook()
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)

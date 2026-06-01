@@ -24,6 +24,18 @@ app = Flask(__name__)
 # ====================
 application = Application.builder().token(BOT_TOKEN).build()
 
+# ====================
+# === FONCTION UTILITAIRE ===
+# ====================
+def escape_markdown(text):
+    """Échappe les caractères réservés du Markdown Telegram"""
+    if not text:
+        return ""
+    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in escape_chars:
+        text = text.replace(char, f'\\{char}')
+    return text
+
 # ==========================================
 # === SOURCE 1: NewsAPI (actualités web) ===
 # ==========================================
@@ -64,19 +76,19 @@ def fetch_newsapi():
             full_text += "\n\n" + content.split("[+")[0]
         
         post = (
-            f"🚗💨 *{title}*\n"
+            f"🚗💨 *{escape_markdown(title)}*\n"
             f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"{full_text}\n\n"
+            f"{escape_markdown(full_text)}\n\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"📌 *Source :* {source}\n"
-            f"🔗 *Lire l'article complet :*\n{link}\n\n"
+            f"📌 *Source :* {escape_markdown(source)}\n"
+            f"🔗 *Lire l'article complet :*\n{escape_markdown(link)}\n\n"
             f"#GTA6 #GrandTheftAuto6 #Gaming #News #RockstarGames"
         )
         
         return post
     
     except Exception as e:
-        return f"❌ Erreur NewsAPI: {str(e)[:100]}"
+        return None
 
 # =====================================
 # === SOURCE 2: Reddit r/GTA6       ===
@@ -120,20 +132,20 @@ def fetch_reddit():
             text = text[:1000] + "..."
         
         post = (
-            f"🎮🔥 *{title}*\n"
+            f"🎮🔥 *{escape_markdown(title)}*\n"
             f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"{text}\n\n"
+            f"{escape_markdown(text)}\n\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"👍 {ups} upvotes | 💬 {num_comments} commentaires\n"
-            f"👤 u/{author} | r/GTA6\n"
-            f"🔗 *Voir la discussion :*\n{url}\n\n"
+            f"👤 u/{escape_markdown(author)} | r/GTA6\n"
+            f"🔗 *Voir la discussion :*\n{escape_markdown(url)}\n\n"
             f"#GTA6 #Reddit #Gaming #GTA6Community #Rockstar"
         )
         
         return post
     
     except Exception as e:
-        return f"❌ Erreur Reddit: {str(e)[:100]}"
+        return None
 
 # ============================================
 # === SOURCE 3: Google News RSS            ===
@@ -170,20 +182,20 @@ def fetch_google_news():
         date_str = pub_date.text if pub_date is not None else ""
         
         post = (
-            f"🌐📰 *{title[:150]}*\n"
+            f"🌐📰 *{escape_markdown(title[:150])}*\n"
             f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"{desc_text}\n\n"
+            f"{escape_markdown(desc_text)}\n\n"
             f"━━━━━━━━━━━━━━━━━━\n"
-            f"📌 *Source :* {source}\n"
-            f"📅 {date_str}\n"
-            f"🔗 *Lire l'article :*\n{link}\n\n"
+            f"📌 *Source :* {escape_markdown(source)}\n"
+            f"📅 {escape_markdown(date_str)}\n"
+            f"🔗 *Lire l'article :*\n{escape_markdown(link)}\n\n"
             f"#GTA6 #GrandTheftAuto6 #GamingNews #GTA6News #Rockstar"
         )
         
         return post
     
     except Exception as e:
-        return f"❌ Erreur Google News: {str(e)[:100]}"
+        return None
 
 # ====================
 # === COMMANDES ===
@@ -210,14 +222,21 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     post = fetch_newsapi()
     
-    if post and not post.startswith("❌"):
+    if post:
         await msg.edit_text("✅ Article trouvé ! Envoi en cours...")
         await asyncio.sleep(0.3)
-        await update.message.reply_text(
-            "📋 *POST PRÊT À PUBLIER*\n\n" + post,
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
+        try:
+            await update.message.reply_text(
+                "📋 *POST PRÊT À PUBLIER*\n\n" + post,
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
+        except:
+            # Si le markdown échoue, envoyer sans formatage
+            await update.message.reply_text(
+                "📋 *POST PRÊT À PUBLIER*\n\n" + post.replace('*', '').replace('_', ''),
+                disable_web_page_preview=True
+            )
         await msg.delete()
     else:
         await msg.edit_text("❌ Aucun article trouvé. Réessaie plus tard.")
@@ -229,14 +248,20 @@ async def reddit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     post = fetch_reddit()
     
-    if post and not post.startswith("❌"):
+    if post:
         await msg.edit_text("✅ Post trouvé ! Envoi en cours...")
         await asyncio.sleep(0.3)
-        await update.message.reply_text(
-            "📋 *POST PRÊT À PUBLIER*\n\n" + post,
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
+        try:
+            await update.message.reply_text(
+                "📋 *POST PRÊT À PUBLIER*\n\n" + post,
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
+        except:
+            await update.message.reply_text(
+                "📋 *POST PRÊT À PUBLIER*\n\n" + post.replace('*', '').replace('_', ''),
+                disable_web_page_preview=True
+            )
         await msg.delete()
     else:
         await msg.edit_text("❌ Aucun post trouvé. Réessaie plus tard.")
@@ -248,14 +273,20 @@ async def googlenews_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     post = fetch_google_news()
     
-    if post and not post.startswith("❌"):
+    if post:
         await msg.edit_text("✅ Article trouvé ! Envoi en cours...")
         await asyncio.sleep(0.3)
-        await update.message.reply_text(
-            "📋 *POST PRÊT À PUBLIER*\n\n" + post,
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
+        try:
+            await update.message.reply_text(
+                "📋 *POST PRÊT À PUBLIER*\n\n" + post,
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
+        except:
+            await update.message.reply_text(
+                "📋 *POST PRÊT À PUBLIER*\n\n" + post.replace('*', '').replace('_', ''),
+                disable_web_page_preview=True
+            )
         await msg.delete()
     else:
         await msg.edit_text("❌ Aucun article trouvé. Réessaie plus tard.")
@@ -275,13 +306,19 @@ async def all_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     found_any = False
     for name, post in sources:
-        if post and not post.startswith("❌"):
+        if post:
             found_any = True
-            await update.message.reply_text(
-                f"*{name}*\n\n{post}",
-                parse_mode="Markdown",
-                disable_web_page_preview=True
-            )
+            try:
+                await update.message.reply_text(
+                    f"*{name}*\n\n{post}",
+                    parse_mode="Markdown",
+                    disable_web_page_preview=True
+                )
+            except:
+                await update.message.reply_text(
+                    f"{name}\n\n{post.replace('*', '').replace('_', '')}",
+                    disable_web_page_preview=True
+                )
             await asyncio.sleep(1)
     
     if found_any:
